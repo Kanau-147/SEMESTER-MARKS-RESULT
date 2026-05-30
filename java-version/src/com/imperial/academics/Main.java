@@ -1,8 +1,15 @@
 package com.imperial.academics;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
 
 public class Main {
+    private static final String DATA_FILE = "students_db.csv";
     private static List<Subject> subjects = new ArrayList<>();
     private static List<Student> students = new ArrayList<>();
 
@@ -39,6 +46,12 @@ public class Main {
                 case "delete":
                     deleteStudentByCli(cmdArgs);
                     break;
+                case "save":
+                    saveDataToFile();
+                    break;
+                case "load":
+                    loadDataFromFile();
+                    break;
                 case "exit":
                 case "quit":
                     System.out.println("Shutting down Imperial Academics Terminal. Goodbye!");
@@ -58,6 +71,11 @@ public class Main {
         subjects.add(new Subject("history", "History & Civics", 100, 35));
         subjects.add(new Subject("cs", "Computer Studies", 100, 45));
 
+        // Read dynamic storage entries
+        loadDataFromFile();
+    }
+
+    private static void populateDefaults() {
         // Populate initial high-caliber student records
         Student s1 = new Student("st-1", "Liam Anderson", "S2026-01", "Class 10 A", "2026");
         s1.addMark("math", 88);
@@ -87,12 +105,118 @@ public class Main {
         students.add(s3);
     }
 
+    private static void loadDataFromFile() {
+        File file = new File(DATA_FILE);
+        if (!file.exists()) {
+            System.out.println("\u001B[33m[INFO] Local system storage database directory clean. Instantiating seed records...\u001B[0m");
+            populateDefaults();
+            saveDataToFile();
+            return;
+        }
+
+        students.clear();
+        
+        // Demonstrating dynamic File Reading utilizing Java try-with-resources statement & Multi-catch blocks
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String header = reader.readLine(); // Ignore CSV Column definitions
+            String line;
+            
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                
+                String[] parts = line.split(",", -1);
+                if (parts.length < 11) {
+                    System.out.println("\u001B[31m[WARNING] Malformed database entry line bypassed: " + line + "\u001B[0m");
+                    continue;
+                }
+                
+                String id = parts[0];
+                String name = parts[1];
+                String rollNumber = parts[2];
+                String gradeClass = parts[3];
+                String academicYear = parts[4];
+                String customRemarks = decodeValue(parts[5]);
+                
+                Student st = new Student(id, name, rollNumber, gradeClass, academicYear);
+                st.setCustomRemarks(customRemarks);
+                
+                // Read and Parse custom subject parameters safely
+                st.addMark("math", parseMarkSafe(parts[6]));
+                st.addMark("science", parseMarkSafe(parts[7]));
+                st.addMark("english", parseMarkSafe(parts[8]));
+                st.addMark("history", parseMarkSafe(parts[9]));
+                st.addMark("cs", parseMarkSafe(parts[10]));
+                
+                students.add(st);
+            }
+            System.out.println("\u001B[32m[SUCCESS] Loaded " + students.size() + " student entries cleanly from physical file storage: '" + DATA_FILE + "'.\u001B[0m");
+        } catch (IOException e) {
+            System.out.println("\u001B[31m[FATAL ERR] File system blocking or access permission failure during disk load.\u001B[0m");
+            System.out.println("Details: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("\u001B[31m[ERROR] High-level parser constraint error occurred: " + e.getMessage() + "\u001B[0m");
+        }
+    }
+
+    private static void saveDataToFile() {
+        File file = new File(DATA_FILE);
+        
+        // Demonstrating File Output Streams utilizing Auto-Closing try write channels
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+            // Write columns configuration metadata
+            writer.write("id,name,rollNumber,gradeClass,academicYear,customRemarks,mathScore,scienceScore,englishScore,historyScore,csScore");
+            writer.newLine();
+
+            for (Student s : students) {
+                String encodedRemarks = encodeValue(s.getCustomRemarks());
+                String row = String.format("%s,%s,%s,%s,%s,%s,%d,%d,%d,%d,%d",
+                        s.getId(),
+                        s.getName(),
+                        s.getRollNumber(),
+                        s.getGradeClass(),
+                        s.getAcademicYear(),
+                        encodedRemarks,
+                        s.getMarks().getOrDefault("math", 0),
+                        s.getMarks().getOrDefault("science", 0),
+                        s.getMarks().getOrDefault("english", 0),
+                        s.getMarks().getOrDefault("history", 0),
+                        s.getMarks().getOrDefault("cs", 0)
+                );
+                writer.write(row);
+                writer.newLine();
+            }
+            System.out.println("\u001B[32m[SYSTEM CLOUD] State successfully persisted to disk: '" + DATA_FILE + "' committed.\u001B[0m");
+        } catch (IOException e) {
+            System.out.println("\u001B[31m[FATAL ERR] Disk full, permissions denied or lock failure committing records.\u001B[0m");
+            System.out.println("Details: " + e.getMessage());
+        }
+    }
+
+    private static int parseMarkSafe(String val) {
+        // Try-Catch mechanism for clean input casting & conversion guard rails
+        try {
+            return Integer.parseInt(val.trim());
+        } catch (NumberFormatException | NullPointerException e) {
+            return 0; // Guard against blank or corrupted CSV record values
+        }
+    }
+
+    private static String encodeValue(String input) {
+        if (input == null) return "";
+        return input.replace(",", "[COMMA_ESC]").replace("\n", "[NEWLINE_ESC]");
+    }
+
+    private static String decodeValue(String input) {
+        if (input == null) return "";
+        return input.replace("[COMMA_ESC]", ",").replace("[NEWLINE_ESC]", "\n");
+    }
+
     private static void showWelcomeBanner() {
         System.out.println("=========================================================================");
         System.out.println("        IMPERIAL ACADEMICS DIVISION - OFFICIAL TRANSCRIPT ENGINE        ");
         System.out.println("=========================================================================");
-        System.out.println("  * Powered by Java JRE Platform");
-        System.out.println("  * Dynamic ledger analytics matching browser terminal specs");
+        System.out.println("  * Powered by Java JRE Platform & Local Disk I/O");
+        System.out.println("  * Active Persistence Storage Database: " + DATA_FILE);
         System.out.println("  * Type 'help' to review cataloged commands, parameters, and examples.");
         System.out.println("=========================================================================");
     }
@@ -103,8 +227,10 @@ public class Main {
         System.out.println("  list                         Display all enrolled students & transcripts");
         System.out.println("  subjects                     Inspect course-wide boundaries & pass levels");
         System.out.println("  add <name> <roll> <marks...> Register student (e.g. add JohnDoe S104 80 90 75 88 95)");
-        System.out.println("  analyze                      Trigger central classroom statistics");
+        System.out.println("  analyze                      Trigger Central Classroom statistics");
         System.out.println("  delete <roll>                Decommission dynamic student roll transcript");
+        System.out.println("  load                         Manually read/re-populate records from students_db.csv");
+        System.out.println("  save                         Manually serialize active records back to students_db.csv");
         System.out.println("  exit                         Exits the command prompt safely");
     }
 
@@ -214,6 +340,9 @@ public class Main {
 
         students.add(st);
         System.out.println("\u001B[32m[SUCCESS] Student \"" + name + "\" registered under Roll \"" + rollNumber + "\" with metrics. Central ledger synced.\u001B[0m");
+        
+        // Save database
+        saveDataToFile();
     }
 
     private static void deleteStudentByCli(String[] args) {
@@ -227,6 +356,8 @@ public class Main {
 
         if (removed) {
             System.out.println("\u001B[32m[SUCCESS] Dismantled student entry matching Roll ID '" + targetRoll + "' from academic tables.\u001B[0m");
+            // Sync dynamic changes back on disk database
+            saveDataToFile();
         } else {
             System.out.println("\u001B[31m[ERROR] Student record matching '" + targetRoll + "' not found.\u001B[0m");
         }
