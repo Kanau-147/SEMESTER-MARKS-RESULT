@@ -1,0 +1,6 @@
+{
+  "name": "Student Results Calculator",
+  "description": "A comprehensive student results calculator, report card generator, and academic performance dashboard with dual GUI/CLI controls and automated progress remarks.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
